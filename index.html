@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#16A34A" />
+<title>FarmaBot · Mini App</title>
+<style>
+  /* ============================================================
+     FarmaBot — Telegram Mini App (WebView)
+     Híbrido: tokens nativos de Telegram (var(--tg-theme-*)) con
+     fallbacks + acento de marca verde vivo #16A34A.
+     ============================================================ */
+  :root{
+    --brand:#16A34A;
+    --brand-700:#15803D;
+    --brand-300:#5BBF7E;
+    --brand-tint:#DCFCE7;
+
+    --win:#16A34A;  --win-tint:#DCFCE7;
+    --loss:#e0483d; --loss-tint:#fdebe9;
+    --warn:#e08a0c; --warn-tint:#fdf1de;   /* sólo urgencia del countdown */
+
+    /* Telegram theme tokens (fallback = light Android) */
+    --bg:var(--tg-theme-bg-color,#ffffff);
+    --text:var(--tg-theme-text-color,#16191c);
+    --hint:var(--tg-theme-hint-color,#8b9398);
+    --sub:var(--tg-theme-subtitle-text-color,#707a80);
+    --sec-bg:var(--tg-theme-secondary-bg-color,#eef1f3);
+    --section:var(--tg-theme-section-bg-color,#ffffff);
+    --sep:var(--tg-theme-section-separator-color,#e6eaec);
+    --link:var(--tg-theme-link-color,var(--brand));
+    --btn:var(--tg-theme-button-color,var(--brand));
+    --btn-text:var(--tg-theme-button-text-color,#ffffff);
+
+    --hair:rgba(0,0,0,.07);
+    --shadow:0 1px 2px rgba(16,24,32,.04), 0 6px 18px rgba(16,24,32,.06);
+    --r:14px; --r-sm:10px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:#c9d2d6;
+    color:var(--text);
+    display:flex;justify-content:center;
+    min-height:100vh;
+    font-size:15px;line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* Phone frame (en desktop). En mobile real ocupa todo. */
+  .app{
+    position:relative;width:100%;max-width:390px;min-height:100vh;
+    background:var(--sec-bg);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  @media(min-width:430px){
+    body{padding:24px 0}
+    .app{min-height:auto;height:844px;border-radius:30px;
+      box-shadow:0 30px 70px rgba(0,0,0,.35);overflow:hidden}
+  }
+
+  /* ---------- Header (verde, compacto: farmacia + BCV) ---------- */
+  .hdr{
+    position:sticky;top:0;z-index:30;
+    background:var(--brand);color:#fff;
+    padding:11px 16px;display:flex;align-items:center;gap:11px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;cursor:pointer;border:0;background:none;padding:0;min-height:40px;color:#fff}
+  .brand .mark{
+    width:34px;height:34px;border-radius:10px;flex:0 0 34px;
+    background:rgba(255,255,255,.18);
+    display:grid;place-items:center;color:#fff;
+  }
+  .brand .mark svg{width:19px;height:19px}
+  .brand b{font-size:15.5px;font-weight:800;letter-spacing:-.2px;color:#fff;line-height:1.1}
+  .brand small{display:block;font-size:11px;color:rgba(255,255,255,.82);font-weight:600;margin-top:1px}
+  .hdr .spacer{flex:1}
+  .bcv{
+    display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;
+    background:rgba(255,255,255,.16);color:#fff;padding:6px 11px;border-radius:11px;
+  }
+  .bcv .k{font-size:9px;font-weight:800;letter-spacing:.7px;opacity:.85}
+  .bcv .v{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+
+  /* ---------- Screen layout ---------- */
+  main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:84px}
+  .screen{display:none;animation:fade .22s ease}
+  .screen.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .pad{padding:16px}
+  .sec-title{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--hint);margin:18px 4px 8px}
+  .card{background:var(--section);border:1px solid var(--hair);border-radius:var(--r);box-shadow:var(--shadow)}
+
+  /* ---------- Dashboard ---------- */
+  /* Banner pendientes — verde vivo, prominente */
+  .alert{
+    margin:16px;display:flex;align-items:center;gap:14px;cursor:pointer;
+    padding:17px 16px;border-radius:18px;
+    background:var(--brand);border:0;color:#fff;
+    box-shadow:0 10px 24px rgba(22,163,74,.30);
+  }
+  .alert .ring{
+    width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.18);color:#fff;
+    display:grid;place-items:center;flex:0 0 46px;
+  }
+  .alert .ring svg{width:23px;height:23px}
+  .alert b{display:block;font-size:15.5px;font-weight:800;color:#fff}
+  .alert span{font-size:12.5px;color:rgba(255,255,255,.88)}
+  .alert .chev{margin-left:auto;color:#fff}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 16px}
+  .stat{background:var(--section);border:1px solid var(--hair);border-radius:var(--r);padding:13px 12px;box-shadow:var(--shadow)}
+  .stat .n{font-size:21px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
+  .stat .l{font-size:11px;color:var(--hint);font-weight:700;margin-top:2px}
+  .stat.win .n{color:var(--brand)} .stat.loss .n{color:var(--loss)}
+  .stat.sales{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+  .stat.sales .n{color:var(--brand);font-size:26px}
+  .stat.sales .bs{font-size:12px;color:var(--brand);font-weight:800}
+
+  .quick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 16px}
+  .qbtn{
+    display:flex;align-items:center;gap:11px;padding:14px;border-radius:var(--r);
+    background:var(--section);border:1px solid var(--hair);box-shadow:var(--shadow);
+    cursor:pointer;text-align:left;color:var(--text);
+  }
+  .qbtn .qi{width:38px;height:38px;border-radius:11px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center;flex:0 0 38px}
+  .qbtn .qi svg{width:20px;height:20px}
+  .qbtn b{font-size:13.5px;font-weight:700;display:block}
+  .qbtn small{font-size:11px;color:var(--hint)}
+
+  /* ---------- Quote cards (Cotizaciones) ---------- */
+  .quote{margin:0 16px 14px;border-radius:var(--r);background:var(--section);border:1px solid var(--hair);box-shadow:var(--shadow);overflow:hidden}
+  .quote .top{display:flex;align-items:center;gap:10px;padding:13px 14px;border-bottom:1px solid var(--sep)}
+  .quote .who b{font-size:14px;font-weight:800}
+  .quote .who small{font-size:11.5px;color:var(--hint);display:block}
+  .timer{
+    margin-left:auto;display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums;
+    font-weight:800;font-size:14px;padding:6px 10px;border-radius:999px;
+    background:var(--brand-tint);color:var(--brand);
+  }
+  .timer svg{width:14px;height:14px}
+  .timer.warn{background:var(--warn-tint);color:var(--warn)}
+  .timer.danger{background:var(--loss-tint);color:var(--loss);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.55}}
+
+  .med{display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--sep)}
+  .med .info{flex:1;min-width:0}
+  .med .info b{font-size:14px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .med .info small{font-size:11.5px;color:var(--hint)}
+  /* toggle "tengo" */
+  .have{
+    width:54px;height:30px;border-radius:999px;border:0;background:#d3dade;position:relative;cursor:pointer;flex:0 0 54px;transition:background .18s;
+  }
+  .have::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
+  .have.on{background:var(--brand)}
+  .have.on::after{transform:translateX(24px)}
+  /* precio inline */
+  .price-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:2px;width:96px;flex:0 0 96px}
+  .price-in{
+    width:96px;text-align:right;font-weight:800;font-size:15px;color:var(--text);
+    border:1px solid var(--sep);background:var(--bg);border-radius:9px;padding:7px 9px;outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .price-in:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-tint)}
+  .price-in:disabled{opacity:.4;background:var(--sec-bg)}
+  .price-bs{font-size:10.5px;color:var(--hint);font-weight:700}
+  .med.off .info{opacity:.45}
+
+  .offer{padding:13px 14px;background:var(--bg)}
+  .disc-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .disc-row label{font-size:12.5px;font-weight:700;color:var(--sub)}
+  .disc-val{font-weight:800;color:var(--brand);font-size:14px}
+  input[type=range]{-webkit-appearance:none;width:100%;height:6px;border-radius:6px;background:var(--sec-bg);outline:none;margin:6px 0 12px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:var(--brand);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--brand);border:3px solid #fff;cursor:pointer}
+  .total-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px}
+  .total-row .lbl{font-size:12.5px;color:var(--hint);font-weight:700}
+  .total-row .cov{font-size:11px;color:var(--hint)}
+  .total-row .amt{font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.5px}
+  .total-row .amt .bs{display:block;font-size:11px;color:var(--hint);font-weight:700;text-align:right}
+  .send{
+    width:100%;border:0;border-radius:12px;padding:14px;font-size:15px;font-weight:800;
+    background:var(--btn);color:var(--btn-text);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;
+    box-shadow:0 4px 12px rgba(22,163,74,.32);
+  }
+  .send:active{transform:translateY(1px)}
+  .send.sent{background:var(--brand-700);box-shadow:none}
+  .send svg{width:18px;height:18px}
+
+  /* ---------- Search / Catálogo ---------- */
+  .search{position:relative;margin:14px 16px 4px}
+  .search svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--hint)}
+  .search input{
+    width:100%;padding:12px 14px 12px 40px;border-radius:12px;border:1px solid var(--sep);
+    background:var(--section);font-size:15px;color:var(--text);outline:none;
+  }
+  .search input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-tint)}
+  .cat-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--sep)}
+  .cat-item:last-child{border-bottom:0}
+  .pill-ic{width:38px;height:38px;border-radius:10px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center;flex:0 0 38px}
+  .pill-ic svg{width:19px;height:19px}
+  .cat-item .info{flex:1;min-width:0}
+  .cat-item .info b{font-size:14px;font-weight:700;display:block}
+  .cat-item .info small{font-size:11.5px;color:var(--hint)}
+  .avail{font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;cursor:pointer;border:0;white-space:nowrap}
+  .avail.on{background:var(--win-tint);color:var(--win)}
+  .avail.off{background:var(--loss-tint);color:var(--loss)}
+  .add-row{margin:14px 16px;display:flex;align-items:center;justify-content:center;gap:8px;
+    padding:14px;border-radius:12px;border:1.5px dashed var(--brand-300);color:var(--brand);
+    background:transparent;font-weight:800;font-size:14px;cursor:pointer;width:calc(100% - 32px)}
+  .add-row svg{width:18px;height:18px}
+  .empty{text-align:center;color:var(--hint);padding:34px 16px;font-size:13.5px}
+
+  /* ---------- Historial ---------- */
+  .chips{display:flex;gap:8px;padding:14px 16px 4px;overflow-x:auto}
+  .chip{border:1px solid var(--sep);background:var(--section);color:var(--sub);font-weight:700;font-size:13px;
+    padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap}
+  .chip.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  .hist{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--sep)}
+  .hist .badge{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;flex:0 0 40px}
+  .hist .badge svg{width:20px;height:20px}
+  .hist.won .badge{background:var(--win-tint);color:var(--win)}
+  .hist.lost .badge{background:var(--loss-tint);color:var(--loss)}
+  .hist .info{flex:1;min-width:0}
+  .hist .info b{font-size:13.5px;font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist .info small{font-size:11.5px;color:var(--hint)}
+  .hist .right{text-align:right}
+  .hist .right .amt{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+  .hist.won .right .amt{color:var(--win)} .hist.lost .right .amt{color:var(--hint);text-decoration:line-through}
+  .hist .right .st{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+  .hist.won .right .st{color:var(--win)} .hist.lost .right .st{color:var(--loss)}
+
+  /* ---------- Perfil ---------- */
+  .prof-head{display:flex;align-items:center;gap:14px;padding:18px 16px}
+  .prof-av{width:60px;height:60px;border-radius:18px;background:linear-gradient(135deg,var(--brand),var(--brand-700));color:#fff;display:grid;place-items:center;font-size:24px;font-weight:800;flex:0 0 60px;box-shadow:0 4px 12px rgba(22,163,74,.3)}
+  .prof-head b{font-size:18px;font-weight:800;display:block}
+  .prof-head small{font-size:12.5px;color:var(--hint)}
+  .list{margin:0 16px;border-radius:var(--r);overflow:hidden;border:1px solid var(--hair);background:var(--section);box-shadow:var(--shadow)}
+  .row{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--sep)}
+  .row:last-child{border-bottom:0}
+  .row .ri{width:34px;height:34px;border-radius:9px;background:var(--sec-bg);color:var(--brand);display:grid;place-items:center;flex:0 0 34px}
+  .row .ri svg{width:18px;height:18px}
+  .row .rt{flex:1;min-width:0}
+  .row .rt b{font-size:14px;font-weight:600;display:block}
+  .row .rt small{font-size:12px;color:var(--hint)}
+  .row .rv{font-size:13px;color:var(--hint);font-weight:600}
+  .sw{width:48px;height:28px;border-radius:999px;border:0;background:#d3dade;position:relative;cursor:pointer;flex:0 0 48px;transition:background .18s}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s}
+  .sw.on{background:var(--brand)} .sw.on::after{transform:translateX(20px)}
+  .tg-row .ri{background:#e7f1fb;color:#229ED9}
+  .badge-ok{font-size:11px;font-weight:800;color:var(--win);background:var(--win-tint);padding:3px 9px;border-radius:999px}
+
+  /* ---------- Tab bar ---------- */
+  .tabs{
+    position:absolute;left:0;right:0;bottom:0;z-index:30;
+    display:grid;grid-template-columns:repeat(4,1fr);
+    background:var(--section);border-top:1px solid var(--sep);
+    padding:7px 6px calc(7px + env(safe-area-inset-bottom));
+  }
+  .tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;cursor:pointer;color:var(--hint);position:relative}
+  .tab svg{width:23px;height:23px}
+  .tab span{font-size:10.5px;font-weight:700}
+  .tab.active{color:var(--brand)}
+  .tab .dot{position:absolute;top:2px;right:calc(50% - 20px);min-width:17px;height:17px;border-radius:999px;background:var(--loss);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--section)}
+
+  .toast{
+    position:absolute;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);
+    background:#16191c;color:#fff;font-size:13px;font-weight:600;padding:11px 16px;border-radius:11px;
+    box-shadow:0 8px 24px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:84%;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===== HEADER: farmacia (izq) + BCV (der) ===== -->
+  <header class="hdr">
+    <button class="brand" id="homeBtn" aria-label="Ir al inicio">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 8a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3Z" stroke="currentColor" stroke-width="2"/><path d="M5 8h14M9 5v6" stroke="currentColor" stroke-width="2"/><path d="M7 14h10v4a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3v-4Z" stroke="currentColor" stroke-width="2"/></svg></span>
+      <span><b>Farmacia San José</b><small>Maracaibo, Zulia</small></span>
+    </button>
+    <span class="spacer"></span>
+    <div class="bcv" aria-label="Tasa BCV de referencia">
+      <span class="k">BCV</span>
+      <span class="v" id="bcvRate">Bs 40,00</span>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ===================== 1 · DASHBOARD ===================== -->
+    <section class="screen active" id="s-dashboard">
+
+      <!-- Banner pendientes (verde vivo, prominente) -->
+      <div class="alert" data-go="cotizaciones" role="button" tabindex="0">
+        <span class="ring"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3 2" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="2"/></svg></span>
+        <div>
+          <b id="pendCount">3 cotizaciones pendientes</b>
+          <span>Responde antes que la competencia gana</span>
+        </div>
+        <span class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="m9 6 6 6-6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+
+      <!-- Métricas: 3 columnas + ventas -->
+      <div class="sec-title pad" style="padding-top:2px;padding-bottom:0">Resumen de junio</div>
+      <div class="stats">
+        <div class="stat win"><div class="n" id="stWon">18</div><div class="l">Ganadas</div></div>
+        <div class="stat loss"><div class="n" id="stLost">7</div><div class="l">Perdidas</div></div>
+        <div class="stat"><div class="n" id="stRate">72%</div><div class="l">Conversión</div></div>
+        <div class="stat sales">
+          <div><div class="l" style="margin-bottom:2px">Ventas del mes</div><div class="n" id="stSales">$486,50</div></div>
+          <div class="bs" id="stSalesBs">≈ Bs 19.460,00</div>
+        </div>
+      </div>
+
+      <!-- Accesos rápidos con subtítulo informativo -->
+      <div class="sec-title pad" style="padding-bottom:0">Accesos rápidos</div>
+      <div class="quick">
+        <button class="qbtn" data-go="cotizaciones">
+          <span class="qi"><svg viewBox="0 0 24 24" fill="none"><path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-2 2-2-2-2 2-2-2-3 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 9h6M9 13h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span><b>Cotizaciones</b><small>3 activas ahora</small></span>
+        </button>
+        <button class="qbtn" data-go="catalogo">
+          <span class="qi"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span><b>Mi catálogo</b><small id="qCatN">12 productos</small></span>
+        </button>
+        <button class="qbtn" data-go="historial">
+          <span class="qi"><svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 3-6.2M4 5v3h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span><b>Historial</b><small>25 este mes</small></span>
+        </button>
+        <button class="qbtn" data-go="perfil">
+          <span class="qi"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <span><b>Mi farmacia</b><small>Perfil y ajustes</small></span>
+        </button>
+      </div>
+      <div style="height:8px"></div>
+    </section>
+
+    <!-- ===================== 2 · COTIZACIONES ===================== -->
+    <section class="screen" id="s-cotizaciones">
+      <div class="sec-title pad" style="padding-bottom:4px">Cotizaciones activas</div>
+      <div id="quoteList"></div>
+      <div class="empty" id="quoteEmpty" style="display:none">No hay cotizaciones activas ahora mismo.</div>
+    </section>
+
+    <!-- ===================== 3 · CATÁLOGO ===================== -->
+    <section class="screen" id="s-catalogo">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="catSearch" type="search" placeholder="Buscar medicamento…" aria-label="Buscar en el catálogo" />
+      </div>
+      <button class="add-row" id="addBtn"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg> Agregar medicamento</button>
+      <div class="card" style="margin:0 16px;overflow:hidden" id="catList"></div>
+      <div style="height:16px"></div>
+    </section>
+
+    <!-- ===================== 4 · HISTORIAL ===================== -->
+    <section class="screen" id="s-historial">
+      <div class="chips" id="histChips">
+        <button class="chip active" data-f="all">Todas</button>
+        <button class="chip" data-f="won">Ganadas</button>
+        <button class="chip" data-f="lost">Perdidas</button>
+      </div>
+      <div class="card" style="margin:12px 16px;overflow:hidden" id="histList"></div>
+    </section>
+
+    <!-- ===================== 5 · PERFIL ===================== -->
+    <section class="screen" id="s-perfil">
+      <div class="prof-head">
+        <div class="prof-av">SJ</div>
+        <div><b>Farmacia San José</b><small>RIF J-30.456.789-1 · Verificada ✓</small></div>
+      </div>
+
+      <div class="sec-title" style="margin-left:20px">Datos de la farmacia</div>
+      <div class="list">
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.3" stroke="currentColor" stroke-width="2"/></svg></span>
+          <div class="rt"><b>Dirección</b><small>Av. 5 de Julio, C.C. Lago Mall, local 12</small></div>
+        </div>
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+          <div class="rt"><b>Horario</b><small>Lun–Sáb 8:00–20:00 · Dom 9:00–14:00</small></div>
+          <span class="badge-ok">Abierta</span>
+        </div>
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" stroke="currentColor" stroke-width="2"/></svg></span>
+          <div class="rt"><b>Zona de cobertura</b><small>Maracaibo · radio 8 km</small></div>
+        </div>
+      </div>
+
+      <div class="sec-title" style="margin-left:20px">Ofertas</div>
+      <div class="list">
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="M9 15 15 9M9.5 9.5h.01M14.5 14.5h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg></span>
+          <div class="rt"><b>Descuento por defecto</b><small>Se aplica al abrir una cotización</small></div>
+          <span class="rv" id="ddVal" style="color:var(--brand);font-weight:800">5%</span>
+        </div>
+        <div class="row" style="padding-top:4px">
+          <input type="range" id="ddSlider" min="0" max="30" value="5" aria-label="Descuento por defecto" style="margin:4px 0">
+        </div>
+      </div>
+
+      <div class="sec-title" style="margin-left:20px">Notificaciones</div>
+      <div class="list">
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
+          <div class="rt"><b>Nuevas cotizaciones</b><small>Aviso al instante</small></div>
+          <button class="sw on" data-sw aria-label="Notificar nuevas cotizaciones" aria-pressed="true"></button>
+        </div>
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/></svg></span>
+          <div class="rt"><b>Recordatorio de cierre</b><small>1 min antes de expirar</small></div>
+          <button class="sw on" data-sw aria-label="Recordatorio de cierre" aria-pressed="true"></button>
+        </div>
+        <div class="row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <div class="rt"><b>Resultado (ganada/perdida)</b><small>Cuando el cliente elige</small></div>
+          <button class="sw" data-sw aria-label="Resultado de cotización" aria-pressed="false"></button>
+        </div>
+      </div>
+
+      <div class="sec-title" style="margin-left:20px">Conexión</div>
+      <div class="list" style="margin-bottom:20px">
+        <div class="row tg-row">
+          <span class="ri"><svg viewBox="0 0 24 24" fill="none"><path d="m21 4-2.5 16-6-4.5L9 18l-1-5L4 11l17-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+          <div class="rt"><b>Telegram</b><small>@farmacia_sanjose_mcbo</small></div>
+          <span class="badge-ok">Conectada</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===== TAB BAR ===== -->
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-go="cotizaciones">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M7 4h10a2 2 0 0 1 2 2v14l-3-2-2 2-2-2-2 2-2-2-3 2V6a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 9h6M9 13h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Cotizaciones</span>
+      <i class="dot" id="tabDot">3</i>
+    </button>
+    <button class="tab" data-go="catalogo">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Catálogo</span>
+    </button>
+    <button class="tab" data-go="historial">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 3-6.2M4 5v3h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Historial</span>
+    </button>
+    <button class="tab" data-go="perfil">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M4 21a8 8 0 0 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span>Perfil</span>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ============================================================
+   FarmaBot Mini App — lógica (vanilla JS, sin backend)
+   ============================================================ */
+const RATE = 40;                       // Bs por USD (referencial BCV)
+const fUSD = n => '$' + n.toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fBs  = n => 'Bs ' + (n*RATE).toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const $  = (s,el=document)=>el.querySelector(s);
+const $$ = (s,el=document)=>[...el.querySelectorAll(s)];
+
+/* ---- Telegram WebApp (si está disponible) ---- */
+try{ const tg=window.Telegram?.WebApp; if(tg){ tg.ready(); tg.expand(); } }catch(e){}
+
+/* ---- BCV en el header (derivado de RATE) ---- */
+$('#bcvRate').textContent = 'Bs ' + RATE.toLocaleString('es-VE',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+/* ---------- Estado (mock realista) ---------- */
+let defaultDiscount = 5;
+
+const quotes = [
+  { id:'q1', who:'Cliente · Maracaibo Centro', secs:228, sent:false, discount:defaultDiscount, meds:[
+    {n:'Atorvastatina', p:'20 mg · 30 comp.', have:true,  price:8.50},
+    {n:'Losartán',      p:'50 mg · 30 comp.', have:true,  price:6.00},
+    {n:'Metformina',    p:'850 mg · 30 comp.',have:false, price:5.00},
+  ]},
+  { id:'q2', who:'Cliente · Av. Bella Vista', secs:512, sent:false, discount:defaultDiscount, meds:[
+    {n:'Amoxicilina',  p:'500 mg · 12 cáps.', have:true, price:4.50},
+    {n:'Acetaminofén', p:'500 mg · 10 comp.', have:true, price:1.20},
+  ]},
+  { id:'q3', who:'Cliente · Sector La Lago', secs:74, sent:false, discount:defaultDiscount, meds:[
+    {n:'Omeprazol',  p:'20 mg · 14 cáps.', have:true,  price:3.80},
+    {n:'Loratadina', p:'10 mg · 10 comp.', have:false, price:2.00},
+    {n:'Enalapril',  p:'10 mg · 20 comp.', have:true,  price:3.20},
+  ]},
+];
+
+let catalog = [
+  {id:'c1', n:'Acetaminofén', p:'500 mg · 10 comp.', price:1.20, on:true},
+  {id:'c2', n:'Amoxicilina',  p:'500 mg · 12 cáps.', price:4.50, on:true},
+  {id:'c3', n:'Atorvastatina',p:'20 mg · 30 comp.',  price:8.50, on:true},
+  {id:'c4', n:'Losartán',     p:'50 mg · 30 comp.',  price:6.00, on:true},
+  {id:'c5', n:'Metformina',   p:'850 mg · 30 comp.', price:5.00, on:false},
+  {id:'c6', n:'Omeprazol',    p:'20 mg · 14 cáps.',  price:3.80, on:true},
+  {id:'c7', n:'Loratadina',   p:'10 mg · 10 comp.',  price:2.00, on:false},
+  {id:'c8', n:'Ibuprofeno',   p:'400 mg · 10 comp.', price:1.80, on:true},
+  {id:'c9', n:'Enalapril',    p:'10 mg · 20 comp.',  price:3.20, on:true},
+  {id:'c10',n:'Amlodipino',   p:'5 mg · 30 comp.',   price:4.00, on:true},
+  {id:'c11',n:'Azitromicina', p:'500 mg · 3 comp.',  price:6.50, on:true},
+  {id:'c12',n:'Diclofenac',   p:'50 mg · 20 comp.',  price:2.40, on:true},
+];
+
+const history = [
+  {id:'h1', t:'Atorvastatina, Losartán +1', st:'won',  amt:18.20, date:'Hoy · 11:32'},
+  {id:'h2', t:'Amoxicilina, Acetaminofén',  st:'lost', amt:5.70,  date:'Hoy · 09:15'},
+  {id:'h3', t:'Omeprazol, Enalapril',       st:'won',  amt:6.65,  date:'Ayer · 18:40'},
+  {id:'h4', t:'Ibuprofeno x2',              st:'won',  amt:3.42,  date:'Ayer · 16:02'},
+  {id:'h5', t:'Azitromicina, Loratadina',   st:'lost', amt:8.10,  date:'27 jun · 14:20'},
+  {id:'h6', t:'Amlodipino, Losartán',       st:'won',  amt:9.50,  date:'26 jun · 10:05'},
+  {id:'h7', t:'Diclofenac, Acetaminofén',   st:'won',  amt:3.60,  date:'25 jun · 19:48'},
+  {id:'h8', t:'Metformina, Omeprazol',      st:'lost', amt:8.80,  date:'24 jun · 12:11'},
+];
+
+/* ---------- Navegación ---------- */
+function go(name){
+  $$('.screen').forEach(s=>s.classList.toggle('active', s.id==='s-'+name));
+  $$('.tab').forEach(t=>t.classList.toggle('active', t.dataset.go===name));
+  $('#main').scrollTop = 0;
+}
+document.addEventListener('click', e=>{
+  const g = e.target.closest('[data-go]');
+  if(g){ go(g.dataset.go); }
+});
+$('#homeBtn').onclick = ()=>{ go('dashboard'); $$('.tab').forEach(t=>t.classList.remove('active')); };
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg){
+  const el=$('#toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+/* ---------- Cotizaciones ---------- */
+function calc(q){
+  const sub = q.meds.reduce((s,m)=> s + (m.have ? m.price : 0), 0);
+  const total = sub * (1 - q.discount/100);
+  const cov = q.meds.filter(m=>m.have).length;
+  return {sub, total, cov, n:q.meds.length};
+}
+function fmtTime(s){ const m=Math.floor(s/60), ss=s%60; return m+':'+String(ss).padStart(2,'0'); }
+
+function renderQuotes(){
+  const list=$('#quoteList');
+  list.innerHTML = quotes.map(q=>{
+    const {total,cov,n}=calc(q);
+    return `<article class="quote" data-q="${q.id}">
+      <div class="top">
+        <div class="who"><b>${cov}/${n} medicamentos</b><small>${q.who}</small></div>
+        <div class="timer" data-timer="${q.id}"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>${fmtTime(q.secs)}</span></div>
+      </div>
+      ${q.meds.map((m,i)=>`
+        <div class="med ${m.have?'':'off'}" data-med="${i}">
+          <div class="info"><b>${m.n}</b><small>${m.p}</small></div>
+          <div class="price-wrap">
+            <input class="price-in" inputmode="decimal" value="${m.price.toFixed(2)}" ${m.have?'':'disabled'} data-price aria-label="Precio ${m.n}">
+            <span class="price-bs" data-bs>${fBs(m.price)}</span>
+          </div>
+          <button class="have ${m.have?'on':''}" data-have aria-pressed="${m.have}" aria-label="Tengo ${m.n}"></button>
+        </div>`).join('')}
+      <div class="offer">
+        <div class="disc-row"><label>Descuento</label><span class="disc-val" data-disc>${q.discount}%</span></div>
+        <input type="range" min="0" max="30" value="${q.discount}" data-slider aria-label="Descuento de la oferta">
+        <div class="total-row">
+          <div><div class="lbl">Total oferta</div><div class="cov" data-cov>${cov} de ${n} disponibles</div></div>
+          <div><div class="amt" data-total>${fUSD(total)}<span class="bs" data-totalbs>${fBs(total)}</span></div></div>
+        </div>
+        <button class="send ${q.sent?'sent':''}" data-send>${q.sent
+          ? '<svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Oferta enviada'
+          : '<svg viewBox="0 0 24 24" fill="none"><path d="m21 4-2.5 16-6-4.5L9 18l-1-5L4 11l17-7Z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg> Enviar oferta'}</button>
+      </div>
+    </article>`;
+  }).join('');
+  $('#quoteEmpty').style.display = quotes.length ? 'none':'block';
+}
+
+/* recomputa totales de una quote sin re-render (preserva foco del precio) */
+function refreshTotals(card,q){
+  const {total,cov,n}=calc(q);
+  $('[data-total]',card).childNodes[0].nodeValue = fUSD(total);
+  $('[data-totalbs]',card).textContent = fBs(total);
+  $('[data-cov]',card).textContent = `${cov} de ${n} disponibles`;
+  $('.who b',card).textContent = `${cov}/${n} medicamentos`;
+}
+
+/* Delegación de eventos de las cotizaciones */
+$('#quoteList').addEventListener('click', e=>{
+  const card=e.target.closest('[data-q]'); if(!card) return;
+  const q=quotes.find(x=>x.id===card.dataset.q);
+
+  const have=e.target.closest('[data-have]');
+  if(have){
+    const i=+have.closest('[data-med]').dataset.med;
+    q.meds[i].have=!q.meds[i].have;
+    have.classList.toggle('on',q.meds[i].have);
+    have.setAttribute('aria-pressed',q.meds[i].have);
+    const row=have.closest('.med');
+    row.classList.toggle('off',!q.meds[i].have);
+    $('[data-price]',row).disabled = !q.meds[i].have;
+    refreshTotals(card,q);
+    return;
+  }
+  const send=e.target.closest('[data-send]');
+  if(send){
+    const {cov}=calc(q);
+    if(cov===0){ toast('⚠️ Marca al menos un medicamento disponible'); return; }
+    q.sent=true;
+    send.classList.add('sent');
+    send.innerHTML='<svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg> Oferta enviada';
+    toast('✅ Oferta enviada al cliente');
+  }
+});
+$('#quoteList').addEventListener('input', e=>{
+  const card=e.target.closest('[data-q]'); if(!card) return;
+  const q=quotes.find(x=>x.id===card.dataset.q);
+
+  if(e.target.matches('[data-slider]')){
+    q.discount=+e.target.value;
+    $('[data-disc]',card).textContent=q.discount+'%';
+    refreshTotals(card,q);
+  }
+  if(e.target.matches('[data-price]')){
+    const i=+e.target.closest('[data-med]').dataset.med;
+    const v=parseFloat(e.target.value.replace(',','.'))||0;
+    q.meds[i].price=v;
+    e.target.closest('.price-wrap').querySelector('[data-bs]').textContent=fBs(v);
+    refreshTotals(card,q);
+  }
+});
+
+/* ---------- Catálogo ---------- */
+function renderCatalog(filter=''){
+  const f=filter.trim().toLowerCase();
+  const items=catalog.filter(c=>c.n.toLowerCase().includes(f));
+  const el=$('#catList');
+  if(!items.length){ el.innerHTML=`<div class="empty">Sin resultados para “${filter}”.</div>`; return; }
+  el.innerHTML=items.map(c=>`
+    <div class="cat-item" data-c="${c.id}">
+      <span class="pill-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="18" height="8" rx="4" stroke="currentColor" stroke-width="2"/><path d="M12 8v8" stroke="currentColor" stroke-width="2"/></svg></span>
+      <div class="info"><b>${c.n}</b><small>${c.p}</small></div>
+      <div class="price-wrap">
+        <input class="price-in" inputmode="decimal" value="${c.price.toFixed(2)}" data-cprice aria-label="Precio ${c.n}">
+        <span class="price-bs" data-cbs>${fBs(c.price)}</span>
+      </div>
+      <button class="avail ${c.on?'on':'off'}" data-avail aria-label="Disponibilidad ${c.n}">${c.on?'Disponible':'Agotado'}</button>
+    </div>`).join('');
+}
+$('#catSearch').addEventListener('input', e=> renderCatalog(e.target.value));
+$('#catList').addEventListener('click', e=>{
+  const av=e.target.closest('[data-avail]'); if(!av) return;
+  const c=catalog.find(x=>x.id===av.closest('[data-c]').dataset.c);
+  c.on=!c.on;
+  av.classList.toggle('on',c.on); av.classList.toggle('off',!c.on);
+  av.textContent=c.on?'Disponible':'Agotado';
+  toast(c.on?`✓ ${c.n} disponible`:`✕ ${c.n} marcado agotado`);
+});
+$('#catList').addEventListener('input', e=>{
+  if(!e.target.matches('[data-cprice]')) return;
+  const c=catalog.find(x=>x.id===e.target.closest('[data-c]').dataset.c);
+  c.price=parseFloat(e.target.value.replace(',','.'))||0;
+  e.target.closest('.price-wrap').querySelector('[data-cbs]').textContent=fBs(c.price);
+});
+let addN=1;
+$('#addBtn').onclick=()=>{
+  catalog.unshift({id:'new'+(addN++), n:'Nuevo medicamento', p:'Editar presentación', price:0, on:true});
+  renderCatalog($('#catSearch').value);
+  $('#catList').scrollIntoView({behavior:'smooth',block:'start'});
+  const first=$('#catList .price-in'); if(first){ first.focus(); first.select(); }
+  toast('➕ Producto agregado — edita precio y nombre');
+};
+
+/* ---------- Historial ---------- */
+function renderHistory(f='all'){
+  const items=history.filter(h=> f==='all'||h.st===f);
+  $('#histList').innerHTML=items.map(h=>`
+    <div class="hist ${h.st==='won'?'won':'lost'}">
+      <span class="badge">${h.st==='won'
+        ? '<svg viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none"><path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'}</span>
+      <div class="info"><b>${h.t}</b><small>${h.date}</small></div>
+      <div class="right"><div class="amt">${fUSD(h.amt)}</div><div class="st">${h.st==='won'?'Ganada':'Perdida'}</div></div>
+    </div>`).join('') || `<div class="empty">Nada por aquí todavía.</div>`;
+}
+$('#histChips').addEventListener('click', e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  $$('.chip',$('#histChips')).forEach(x=>x.classList.remove('active'));
+  c.classList.add('active');
+  renderHistory(c.dataset.f);
+});
+
+/* ---------- Perfil ---------- */
+$('#ddSlider').addEventListener('input', e=>{
+  defaultDiscount=+e.target.value;
+  $('#ddVal').textContent=defaultDiscount+'%';
+});
+$$('[data-sw]').forEach(sw=> sw.onclick=()=>{
+  const on=sw.classList.toggle('on'); sw.setAttribute('aria-pressed',on);
+});
+
+/* ---------- Countdown vivo ---------- */
+setInterval(()=>{
+  quotes.forEach(q=>{
+    if(q.secs>0) q.secs--;
+    const t=$(`[data-timer="${q.id}"]`);
+    if(!t) return;
+    t.querySelector('span').textContent = q.secs>0 ? fmtTime(q.secs) : 'Expirada';
+    t.classList.toggle('warn', q.secs<=120 && q.secs>60);
+    t.classList.toggle('danger', q.secs<=60 && q.secs>0);
+  });
+},1000);
+
+/* ---------- Init ---------- */
+renderQuotes();
+renderCatalog();
+renderHistory();
+go('dashboard'); $$('.tab').forEach(t=>t.classList.remove('active'));
+</script>
+</body>
+</html>
